@@ -1,56 +1,174 @@
-# Redrob Hackathon: Intelligent Candidate Discovery & Ranking (Track 01)
+# India Runs Candidate Ranking
 
-## Team: CodeCrew
+Track 1: Data and AI Challenge
 
-### Team Members
-- **Venkatachalam S** (Team Lead & Core AI Ranking Engine) - venkatachalamsubramanian23@gmail.com
-- **Ameen Basha A** (Problem Statement Research & AI Improvements) - ameenbashanawaz.123@gmail.com
-- **Vasu Vigneshwaran P** (Feature Engineering & Validation) - vasuvignesh28@gmail.com
-- **Samritha R** (Documentation, Evaluation & Presentation) - samritha0123sai@gmail.com
+Team: CodeCrew
 
----
+This repository contains an offline candidate discovery and ranking pipeline for the Redrob India Runs challenge. It reads candidate profiles, retrieves likely matches for job-style queries, scores each profile with multiple hiring signals, and writes the required `submission.csv` with 100 ranked candidates.
 
-## 1. The Problem
-Recruiters are tasked with finding the perfect fit from oceans of profiles, but traditional keyword filters fall short. They miss the hidden gems—candidates whose true potential, intent, and subtle behavioral signals are lost in the noise of keyword-stuffed profiles. We needed a smarter system that acts as an "AI recruiter", capable of looking beyond surface-level keywords to deeply understand context, predict relevance, and integrate multi-dimensional signals to deliver precise candidate shortlists.
+## What The System Does
 
-## 2. Our Approach
-To solve this, we avoided black-box neural inference at rank time in favor of a **transparent, fully offline multi-signal ranker**. This ensures high execution speed and interpretability.
-
-Our strategy specifically inverts the "keyword-stuffer trap" by isolating the skills array and focusing on real semantic fit and career trajectories. The top results are genuine professionals in AI, ML, Search, NLP, and Recommendation systems, not off-domain candidates who padded their profiles with buzzwords.
-
-## 3. Architecture & Pipeline
-The ranking engine is designed for rapid processing and deterministic output (byte-identical reruns), operating entirely offline without the need for external API calls.
-
-### Pipeline Stages
-1. **Data Ingestion**: Reads large pools of candidates from a structured `.jsonl` format.
-2. **Feature Extraction**: Parses candidate profiles to extract textual data (headline, summary, role descriptions) and structured metadata (experience, locations, education, skill assessments).
-3. **Semantic Scoring (TF-IDF)**: Calculates cosine similarity between a meticulously crafted Job Description (JD) vector and the candidate's textual features, explicitly excluding raw skill arrays.
-4. **Heuristic Evaluation**: Evaluates candidates across multiple specialized dimensions:
-   - **Title/Career-Trajectory Fit**: The most decisive signal, identifying progressive growth in relevant domains.
-   - **Experience-Band Fit**: Targets the "sweet spot" of 5-9 years.
-   - **Skill Credibility**: Validates skills based on endorsements and usage duration, discarding "expert with 0 months" claims.
-5. **Penalties & Behavioral Adjustments**:
-   - Applies multipliers to down-weight disengaged or unreachable candidates.
-   - Penalizes candidates with off-domain titles or irrelevant tech stacks (e.g., vision/speech without NLP/IR).
-   - **Consistency Detector (Honeypot Filter)**: Identifies logically impossible profiles and forces them to the bottom.
-6. **Aggregation & Output**: Aggregates the weighted sub-scores (summing to 1.0), ranks the candidates, and outputs a highly accurate shortlist to `submission.csv`.
-
----
-
-## Reproducibility & Execution
-
-Our solution efficiently processes ~100K candidates in ~1-3 minutes on a standard CPU.
-
-### Environment Requirements
-- **Platform**: Local workstation (Windows/Linux/macOS)
-- **Python**: 3.10.11 (or compatible)
-- **Hardware**: CPU-only (No GPU required), ~16GB RAM recommended
-- **Network**: Completely offline (No external API calls during ranking)
-
-### Running the Code
-To run the end-to-end ranking pipeline:
+The main entry point is [rank.py](C:/Users/admin/Downloads/India_runs_data_and_ai_challenge/india-runs/rank.py). It supports two practical modes:
 
 ```bash
-python rank.py --candidates ./candidates.jsonl --out ./submission.csv
+python rank.py --batch
+python rank.py --query "senior python developer with fastapi and aws in pune"
 ```
-This command reads the candidate pool from `candidates.jsonl` and writes the ranked output to `submission.csv`. The entire process runs offline and does not require pre-computation.
+
+Batch mode runs 20 predefined role queries across software engineering, data/ML, DevOps, cloud, mobile, security, QA, analytics, product, and SRE roles. Query mode runs the same ranking stack for one supplied job description or search phrase.
+
+The output is always:
+
+```text
+candidate_id,rank,score,reasoning
+```
+
+## Methodology
+
+The ranker combines retrieval, scoring, and consistency checks:
+
+1. Query parsing extracts skills, experience requirements, seniority hints, location, and aliases from natural-language text.
+2. Hybrid retrieval combines FAISS vector search with BM25 keyword search. The checked-in full index uses a fast local 384-dim hashing representation; the slower transformer builder can be used when MiniLM embeddings are available.
+3. Reciprocal Rank Fusion merges vector and keyword candidates.
+4. An optional cross-encoder reranker (`cross-encoder/ms-marco-MiniLM-L-6-v2`) refines query/profile relevance when the model is available.
+5. Structured skill matching checks the candidate skill array using exact, alias, and fuzzy matching.
+6. Experience and title matching penalize candidates whose seniority or role family does not fit the query.
+7. Behavioral, career trajectory, and skill proficiency scores use Redrob-style platform signals such as recruiter response rate, profile completeness, verification, saved-by-recruiter count, GitHub activity, openness to work, and interview completion rate.
+8. Honeypot detection applies a strong penalty to internally inconsistent profiles, including impossible company dates, unrealistic skill density, expert skills with zero usage years, and unexplained long gaps.
+
+The final score is a weighted fusion configured in [configs/scoring_weights.yaml](C:/Users/admin/Downloads/India_runs_data_and_ai_challenge/india-runs/configs/scoring_weights.yaml).
+
+## Scoring Weights
+
+| Signal | Weight |
+| --- | ---: |
+| Semantic similarity | 0.20 |
+| Skill match | 0.20 |
+| Cross-encoder or RRF relevance | 0.15 |
+| Behavioral score | 0.15 |
+| Keyword match | 0.10 |
+| Experience match | 0.08 |
+| Career trajectory | 0.07 |
+| Skill proficiency | 0.05 |
+| Location match | 0.00 |
+| Education match | 0.00 |
+
+Location and education are modeled but currently have zero backend weight. The Gradio UI has separate recruiter-facing sliders for interactive re-ranking.
+
+## Repository Layout
+
+```text
+.
+|-- rank.py                         Main submission generation script
+|-- submission.csv                  Generated ranked output
+|-- submission_metadata.yaml        Hackathon metadata and methodology
+|-- configs/
+|   |-- scoring_weights.yaml        Ranking weights and listwise settings
+|   |-- settings.yaml               App/search settings
+|   `-- models.yaml                 Model configuration
+|-- src/
+|   |-- agents/                     Planner, executor, reflector, orchestrator
+|   |-- search/                     FAISS, BM25, hybrid fusion, reranker
+|   |-- matching/                   Skill, experience, behavior, confidence scoring
+|   |-- language/                   Multilingual embeddings and language helpers
+|   |-- fairness/                   Bias/anonymization utilities
+|   |-- rationale/                  Candidate explanation generation
+|   |-- extraction/                 Profile field extraction
+|   |-- ingestion/                  Parsers and normalizers
+|   |-- api/                        FastAPI routes
+|   `-- ui/                         Gradio interface
+|-- scripts/                        Index building and evaluation utilities
+`-- tests/                          Unit and integration tests
+```
+
+## Setup
+
+Use Python 3.10 or newer.
+
+```bash
+pip install -e .
+```
+
+For development extras:
+
+```bash
+pip install -e ".[dev]"
+```
+
+Prebuilt indexes are expected under `data/indexes/`:
+
+```text
+data/indexes/faiss_index.bin
+data/indexes/faiss_id_map.json
+data/indexes/bm25_index.pkl
+data/indexes/offset_index.json
+data/indexes/index_meta.json
+```
+
+For this workspace, the full candidate file is `data/candidates.jsonl`. Rebuild the practical full-dataset indexes with:
+
+```bash
+python scripts/build_fast_indexes.py --profiles ./data/candidates.jsonl
+```
+
+To rebuild the slower transformer-backed indexes instead:
+
+```bash
+python scripts/build_indexes.py --profiles ./data/candidates.jsonl --force
+```
+
+## Running
+
+Generate a submission with the predefined strategic query set:
+
+```bash
+python rank.py --batch --out submission.csv
+```
+
+Run one query:
+
+```bash
+python rank.py --query "data engineer with spark airflow kafka python in pune" --out submission.csv
+```
+
+Interactive mode:
+
+```bash
+python rank.py
+```
+
+Launch the optional UI:
+
+```bash
+python src/ui/app.py
+```
+
+Launch the API:
+
+```bash
+python src/main.py
+```
+
+## Testing
+
+```bash
+python -m pytest tests/ -q
+```
+
+Useful focused tests:
+
+```bash
+python -m pytest tests/test_matching tests/test_search -q
+python -m pytest tests/test_agents tests/test_integration -q
+```
+
+## Reproducibility Notes
+
+- Ranking is designed to run CPU-only.
+- The batch path skips cross-encoder inference and uses normalized hybrid/RRF relevance for speed and offline reliability.
+- Candidate filling uses a fixed random seed when additional profiles are needed to reach 100 rows.
+- Submission writing asserts 100 rows, unique candidate IDs, valid `CAND_` IDs, and complete rank coverage from 1 to 100.
+
+## Current Submission Snapshot
+
+The checked-in [submission.csv](C:/Users/admin/Downloads/India_runs_data_and_ai_challenge/india-runs/submission.csv) contains 100 rows with monotonically sorted scores. Each row includes a compact recruiter-style reason using current role, experience, skill count, and response-rate signal.
