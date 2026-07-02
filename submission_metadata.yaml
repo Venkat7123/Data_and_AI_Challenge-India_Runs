@@ -1,0 +1,106 @@
+# Redrob Hackathon - Submission Metadata
+# Intelligent Candidate Discovery & Ranking Challenge (Track 01)
+
+# ============================================================================
+# Team identity - TODO: filled in by the team
+# ============================================================================
+team_name: "CodeCrew"
+
+primary_contact:
+  name: "Venkatachalam S"
+  email: "venkatachalamsubramanian23@gmail.com"
+  phone: "+91 944 363 7965"
+
+team_members:
+  - name: "Venkatachalam S"
+    email: "venkatachalamsubramanian23@gmail.com"
+    role: "Team Lead & Core AI Ranking Engine"
+
+  - name: "Ameen Basha A"
+    email: "ameenbashanawaz.123@gmail.com"
+    role: "Problem Statement Research & AI Improvements"
+
+  - name: "Vasu Vigneshwaran P"
+    email: "vasuvignesh28@gmail.com"
+    role: "Feature Engineering & Validation"
+
+  - name: "Samritha R"
+    email: "samritha0123sai@gmail.com"
+    role: "Documentation, Evaluation & Presentation"
+
+# ============================================================================
+# Code and reproducibility
+# ============================================================================
+github_repo: "https://github.com/Venkat7123/Data_and_AI_Challenge-India_Runs"   # TODO: team to set
+
+sandbox_link: "https://huggingface.co/spaces/YOUR_USERNAME/redrob-ranker"  # TODO: team to set
+
+reproduce_command: "python rank.py --batch --out ./submission.csv"
+# Loads the prepared indexes under data/indexes/ and writes submission.csv.
+# Runs on CPU and uses the deterministic batch path for submission generation.
+
+# ============================================================================
+# Compute environment
+# ============================================================================
+compute:
+  platform: "Local Windows workstation"
+  cpu_cores: 10
+  ram_gb: 16
+  python_version: "3.10.11"
+  os: "Windows 11"
+  uses_gpu_for_inference: false      # CPU only
+  has_network_during_ranking: false  # No external calls during ranking
+  pre_computation_required: true     # FAISS/BM25 indexes are expected under data/indexes/
+  pre_computation_time_minutes: 3
+
+# ============================================================================
+# AI tools declaration (transparency only - not penalized)
+# ============================================================================
+ai_tools_used:
+  - "ChatGPT"
+  - "Claude"
+
+ai_usage_summary: |
+  - Used ChatGPT for understanding the problem statement, clarifying challenge requirements, 
+    brainstorming solution approaches, refining the overall methodology, 
+    and validating the feature engineering strategy. It also assisted in organizing the project workflow, 
+    identifying key evaluation factors, and improving documentation and 
+    reasoning to ensure the solution aligns with the competition objectives.
+
+  - Used Claude for designing the system architecture, reviewing and improving the codebase, 
+    suggesting suitable AI models and retrieval techniques, optimizing the ranking pipeline, 
+    refining scoring logic, identifying potential edge cases, and recommending scalable implementation practices. 
+    It also helped validate the overall technical design and improve the robustness of the candidate ranking engine.
+
+# ============================================================================
+# Approach summary (<=200 words)
+# ============================================================================
+
+methodology_summary: |
+  Offline multi-signal candidate ranker using hybrid retrieval plus structured
+  hiring signals. Natural-language role queries are parsed for skills,
+  experience, seniority, location, and aliases. Retrieval combines FAISS vector
+  search over a local 384-dim hashing representation with BM25 keyword search,
+  then merges candidates through Reciprocal Rank Fusion. In full query mode an
+  optional cross-encoder reranker can refine relevance; batch submission mode
+  skips neural reranking for deterministic CPU performance and uses normalized
+  hybrid relevance instead. Final scoring is a weighted fusion of similarity,
+  keyword match, structured skill overlap, experience fit, title fit,
+  behavioral signals, career trajectory, and skill proficiency. Skill matching
+  uses exact, alias, and fuzzy comparison against the structured skills array,
+  not just free-text keyword stuffing. Behavioral scoring uses recruiter
+  response rate, saves, completeness, verification, GitHub activity, openness to
+  work, relocation, interview completion, and recency. Honeypot checks strongly
+  penalize impossible company timelines, excessive skills per year, expert
+  skills with zero usage, and unexplained long gaps. The writer enforces 100
+  unique CAND_* rows with ranks 1-100 and non-increasing scores.
+
+# ============================================================================
+# Declarations
+# ============================================================================
+declarations:
+  read_submission_spec: true
+  code_is_original_work: true
+  no_collusion: true
+  honeypot_check_done: true          # consistency detector forces honeypots to the bottom
+  reproduction_tested: true          # validated locally with validate_submission.py
